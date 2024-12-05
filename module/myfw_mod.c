@@ -588,8 +588,8 @@ static int __init myfirewall_init(void) {
 	timer_setup(&connect_timer, time_out, 0);
 	mod_timer(&connect_timer, jiffies + HZ);
 	
-	nf_register_hook(&hook_in_ops);
-	nf_register_hook(&hook_out_ops);
+	nf_register_net_hook(&init_net, &hook_in_ops);
+	nf_unregister_net_hook(&init_net, &hook_out_ops);
 
 	printk("Myfw start\n");
 
@@ -607,8 +607,8 @@ static void __exit myfirewall_exit(void) {
 	unregister_chrdev_region(devID, 255);
 	del_timer(&connect_timer);
 
-	nf_unregister_hook(&hook_in_ops);
-	nf_unregister_hook(&hook_out_ops);
+	nf_unregister_net_hook(&init_net, &hook_in_ops);
+	nf_unregister_net_hook(&init_net, &hook_out_ops);
 
 	printk("Myfw exit\n");
 }
