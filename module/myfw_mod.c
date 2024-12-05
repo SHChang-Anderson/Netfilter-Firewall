@@ -580,7 +580,7 @@ static int __init myfirewall_init(void) {
 	printk(KERN_INFO "MINOR Number is %d\n", MINOR(devID));
 	cdev_add(&cdev, devID, 255);
 
-	D_class = class_create(THIS_MODULE, "Myfw");
+	D_class = class_create("Myfw");
 	D_device = device_create(D_class, NULL, devID, NULL, "myfw");
 
 	
