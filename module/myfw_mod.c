@@ -133,7 +133,7 @@ void insert_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,
 // 记录日志
 void add_log(Rule *p);
 // 连接超时
-void time_out(unsigned long x);
+void time_out(struct timer_list *timer);
 // 打印规则
 void print_rules(void);
 // 打印连接
@@ -158,9 +158,7 @@ static struct nf_hook_ops hook_out_ops = {
     .priority   = NF_IP_PRI_FIRST       // 优先级
 };
 // 连接超时结构体定义
-static struct timer_list connect_timer = {
-	.function = time_out
-};
+static struct timer_list connect_timer;
 // 字符设备结构体定义(与用户程序信息交换)
 static const struct file_operations datadev_fops = {
 	.open		= datadev_open,			// 打开字符设备
@@ -347,7 +345,7 @@ void add_log(Rule *p) {
 		log_num = 0;
 }
 
-void time_out(unsigned long x) {
+void time_out(struct timer_list *timer) {
 	// p=首个连接，p0=链表头
 	Connection *p = conHead.next, *p0 = &conHead;
 	// 等待开锁
@@ -372,8 +370,7 @@ void time_out(unsigned long x) {
 	}
 	// 开锁
 	hashLock = 0;
-	connect_timer.expires = jiffies + HZ;
-	add_timer(&connect_timer);
+	mod_timer(timer, jiffies + HZ); 
 }
 
 void print_rules(void) {
@@ -586,11 +583,10 @@ static int __init myfirewall_init(void) {
 	D_class = class_create(THIS_MODULE, "Myfw");
 	D_device = device_create(D_class, NULL, devID, NULL, "myfw");
 
-	connect_timer.expires = jiffies + HZ;
+	
 	//初始化定时器
-	init_timer(&connect_timer);
-	//添加定时器，定时器开始生效
-	add_timer(&connect_timer);
+	timer_setup(&connect_timer, connect_timer_handler, 0);
+	mod_timer(&connect_timer, jiffies + HZ);
 	
 	nf_register_hook(&hook_in_ops);
 	nf_register_hook(&hook_out_ops);
