@@ -585,7 +585,7 @@ static int __init myfirewall_init(void) {
 
 	
 	//初始化定时器
-	timer_setup(&connect_timer, connect_timer_handler, 0);
+	timer_setup(&connect_timer, time_out, 0);
 	mod_timer(&connect_timer, jiffies + HZ);
 	
 	nf_register_hook(&hook_in_ops);
