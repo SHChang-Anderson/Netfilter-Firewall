@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <cstdio> 
 
 
 using namespace std;
@@ -48,7 +49,17 @@ void getRules() {
 void getConnection() {
     // 告诉内核：我要开始读取Connection
     ofstream outputKernel;
+    ifstream checkFile(DEV_NAME);
+    if (!checkFile.is_open()) {
+        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
+        return; // no such file
+    }
+    checkFile.close(); 
     outputKernel.open(DEV_NAME, ios::binary);
+    if (!outputKernel.is_open()) {
+        cerr << "Error: Could get Connection!" << endl;
+        return;
+    }
     outputKernel << OP_GET_CONNECT;
     outputKernel.close();
 
@@ -56,8 +67,15 @@ void getConnection() {
     cout << "Get connection" << endl;
     char databuf[20480];
     ifstream inputKernel;
+    if (!checkFile.is_open()) {
+        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
+        return; // no such file
+    }
     inputKernel.open(DEV_NAME, ios::binary);
-
+    if (!inputKernel.is_open()) {
+        cerr << "Error: Could get Connection!" << endl;
+        return;
+    }
     // FIXME:将connection输入到List中
     int i=0;
     while (inputKernel.read(databuf, sizeof(Connection))) {
@@ -72,9 +90,19 @@ void getConnection() {
 }
 
 void getLogs() {
-    // 告诉内核：我要开始读取Logs
+    // read Logs
     ofstream outputKernel;
+    ifstream checkFile(DEV_NAME);
+    if (!checkFile.is_open()) {
+        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
+        return; // no such file
+    }
+    checkFile.close(); 
     outputKernel.open(DEV_NAME, ios::binary);
+    if (!outputKernel.is_open()) {
+        cerr << "Error: Could not read Logs!" << endl;
+        return;
+    }
     outputKernel << OP_GET_LOG;
     outputKernel.close();
 
@@ -82,7 +110,16 @@ void getLogs() {
     cout << "Get logs" << endl;
     char databuf[20480];
     ifstream inputKernel;
+    if (!checkFile.is_open()) {
+        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
+        return; // no such file
+    }
+    checkFile.close(); 
     inputKernel.open(DEV_NAME, ios::binary);
+    if (!inputKernel.is_open()) {
+        cerr << "Error: Could not read Logs!" << endl;
+        return;
+    }
 
     int i=0;
     while (inputKernel.read(databuf, sizeof(Log))) {
@@ -178,7 +215,7 @@ void commitRule() {
 }
 
 void test() {
-    // addRule("0.1.2.3", "192.168.23.129", "0.0.0.0", "255.255.255.255", ANY, 80, TCP, 0, 1);
+    addRule("0.1.2.3", "192.168.23.129", "0.0.0.0", "255.255.255.255", ANY, 80, TCP, 0, 1);
     // addRule("4.5.6.7", "192.168.23.129", "255.255.255.255", "255.255.255.255", ANY, ANY, ICMP, 1, 0);
     // addRule("8.9.10.11", "192.168.23.129", "0.0.0.0", "255.255.255.255", ANY, 80, TCP, 0, 1);
     // addRule("12.13.14.15", "192.168.23.129", "255.255.255.255", "255.255.255.255", ANY, ANY, ICMP, 1, 0);
@@ -271,6 +308,7 @@ int main(int argc, char* argv[]) {
             printRules();
         }
         else {
+            test();
             help();
             return 0;
         }
