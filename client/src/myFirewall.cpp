@@ -67,10 +67,6 @@ void getConnection() {
     cout << "Get connection" << endl;
     char databuf[20480];
     ifstream inputKernel;
-    if (!checkFile.is_open()) {
-        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
-        return; // no such file
-    }
     inputKernel.open(DEV_NAME, ios::binary);
     if (!inputKernel.is_open()) {
         cerr << "Error: Could get Connection!" << endl;
@@ -110,10 +106,6 @@ void getLogs() {
     cout << "Get logs" << endl;
     char databuf[20480];
     ifstream inputKernel;
-    if (!checkFile.is_open()) {
-        cerr << "Error: File " << DEV_NAME << " does not exist!" << endl;
-        return; // no such file
-    }
     checkFile.close(); 
     inputKernel.open(DEV_NAME, ios::binary);
     if (!inputKernel.is_open()) {
