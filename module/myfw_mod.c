@@ -211,8 +211,8 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 		}
 				// wait unlock
 		spin_lock(&my_lock);
+		int d, i=0;
 		hash_for_each (hashTable, bkt, cur, node) {
-			int d, i=0;
 			d = cur->src_ip;
 			memcpy(&databuf[i * (sizeof(Connection) - 4)], &d, sizeof(unsigned));
 			d = cur->dst_ip;
@@ -345,6 +345,8 @@ void time_out(struct timer_list *timer) {
 	spin_lock(&my_lock);
 	hash_for_each (hashTable, bkt, cur, node) {
 		cur->timer1--;
+		if (cur->timer1 <= 0)
+			hash_del(&cur->node);
 	}
 	spin_unlock(&my_lock);
 
