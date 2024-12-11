@@ -34,6 +34,7 @@
 #define ANY			-1
 #define ICMP_PORT	65530
 
+#define CONNECTION_RECORD_SIZE 24 // Connection Structure Size
 #define MAX_RULE_NUM	50
 #define MAX_LOG_NUM		100
 #define MAX_NAT_NUM 	1000
@@ -209,22 +210,28 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 			printk("Connection: Read Overflow\n");
 			return size;
 		}
-				// wait unlock
+		// wait unlock
 		spin_lock(&my_lock);
 		int d, i=0;
 		hash_for_each (hashTable, bkt, cur, node) {
-			d = cur->src_ip;
-			memcpy(&databuf[i * (sizeof(Connection) - 4)], &d, sizeof(unsigned));
-			d = cur->dst_ip;
-			memcpy(&databuf[i * (sizeof(Connection) - 4) + 4], &d, sizeof(unsigned));
-			d = cur->src_port;
-			memcpy(&databuf[i * (sizeof(Connection) - 4) + 8], &d, sizeof(int));
-			d = cur->dst_port;
-			memcpy(&databuf[i * (sizeof(Connection) - 4) + 12], &d, sizeof(int));
-			d = cur->protocol;
-			memcpy(&databuf[i * (sizeof(Connection) - 4) + 16], &d, sizeof(int));
-			d = cur->timer1;
-			memcpy(&databuf[i * (sizeof(Connection) - 4) + 20], &d, sizeof(unsigned));
+			unsigned int src_ip = cur->src_ip;
+			unsigned int dst_ip = cur->dst_ip;
+			int src_port = cur->src_port;
+			int dst_port = cur->dst_port;
+			int protocol = cur->protocol;
+			unsigned int timer1 = cur->timer1;
+
+			if ((i + 1) * CONNECTION_RECORD_SIZE > sizeof(databuf)) {
+				// Buffer Overflow
+				break;
+			}
+
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE], &src_ip, sizeof(unsigned int));
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE + 4], &dst_ip, sizeof(unsigned int));
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE + 8], &src_port, sizeof(int));
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE + 12], &dst_port, sizeof(int));
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE + 16], &protocol, sizeof(int));
+			memcpy(&databuf[i * CONNECTION_RECORD_SIZE + 20], &timer1, sizeof(unsigned int));
 
 			i++;
 		
