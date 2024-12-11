@@ -4,7 +4,9 @@
 #include <linux/version.h>
 #include <linux/types.h>
 #include <linux/slab.h>
+#include <linux/hashtable.h>
 #include <linux/timer.h>
+#include <linux/spinlock.h>
 
 #include <linux/device.h>
 #include <linux/cdev.h>
@@ -35,7 +37,7 @@
 #define MAX_RULE_NUM	50
 #define MAX_LOG_NUM		100
 #define MAX_NAT_NUM 	1000
-#define HASH_SIZE		1000001
+#define HASH_SIZER		20
 #define CONNECT_TIME	60
 // chrdev ops
 #define OP_WRITE_RULE	0
@@ -99,17 +101,17 @@ typedef struct con{
 	int dst_port;
 	int protocol;
 	int index;
-	struct con *next;
+	char timer1;
+	struct hlist_node node;
 }Connection;
 
-Connection conHead, conEnd;
-// Hash table
-char hashTable[HASH_SIZE]={0};
+DECLARE_HASHTABLE(hashTable, HASH_SIZER);
+
 // Connected numbers
 static int connection_num = 0;
 
 // hash lock
-char hashLock = 0;
+spinlock_t my_lock;
 // op（0 write rules 1 get connection table，2 get logs)
 static unsigned op_flag;
 // read write buffer
@@ -137,7 +139,7 @@ void time_out(struct timer_list *timer);
 
 void print_rules(void);
 
-void print_connections(void);
+// void print_connections(void);
 
 static unsigned get_hash(int k);
 // check all pkg
@@ -145,25 +147,25 @@ bool check_pkg(struct sk_buff *skb);
 
 // netfilter hook sturcture
 static struct nf_hook_ops hook_in_ops = {
-    .hook		= hook_in,				// hook处理函数
-    .pf         = PF_INET,              // 协议类型
-    .hooknum    = NF_INET_PRE_ROUTING,	// hook注册点
-    .priority   = NF_IP_PRI_FIRST       // 优先级
+    .hook		= hook_in,				// Hook processing function
+    .pf         = PF_INET,              // Protocol family type
+    .hooknum    = NF_INET_PRE_ROUTING,	// Hook registration point
+    .priority   = NF_IP_PRI_FIRST       // Priority level
 };
 
 static struct nf_hook_ops hook_out_ops = {
-    .hook		= hook_out,				// hook处理函数
-    .pf         = PF_INET,              // 协议类型
-    .hooknum    = NF_INET_POST_ROUTING,	// hook注册点
-    .priority   = NF_IP_PRI_FIRST       // 优先级
+    .hook		= hook_out,				// Hook processing function
+    .pf         = PF_INET,              // Protocol family type
+    .hooknum    = NF_INET_POST_ROUTING,	// Hook registration point
+    .priority   = NF_IP_PRI_FIRST       // Priority level
 };
 
 static struct timer_list connect_timer;
 
 static const struct file_operations datadev_fops = {
-	.open		= datadev_open,			// 打开字符设备
-	.read		= datadev_read,			// 读取字符设备
-	.write		= datadev_write,		// 写入字符设备
+	.open		= datadev_open,			// open chardev
+	.read		= datadev_read,			// read chardev
+	.write		= datadev_write,		// write chardev
 };
 
 
@@ -198,41 +200,39 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 
 	// get connection table
 	if (op_flag == OP_GET_CONNECT) {
-		// wait unlock
-		while (hashLock)
-			;
-		// lock
-		hashLock = 1;
-		
+
+		Connection *cur;
+		unsigned bkt;
 		// return connection table size
 		ret = connection_num * (sizeof(Connection) - 4);
 		if (ret > size) {
 			printk("Connection: Read Overflow\n");
 			return size;
 		}
-
-		Connection *p = conHead.next;
-		int d, i=0;
-		while (p != &conEnd) {
-			d = p->src_ip;
+				// wait unlock
+		spin_lock(&my_lock);
+		hash_for_each (hashTable, bkt, cur, node) {
+			int d, i=0;
+			d = cur->src_ip;
 			memcpy(&databuf[i * (sizeof(Connection) - 4)], &d, sizeof(unsigned));
-			d = p->dst_ip;
+			d = cur->dst_ip;
 			memcpy(&databuf[i * (sizeof(Connection) - 4) + 4], &d, sizeof(unsigned));
-			d = p->src_port;
+			d = cur->src_port;
 			memcpy(&databuf[i * (sizeof(Connection) - 4) + 8], &d, sizeof(int));
-			d = p->dst_port;
+			d = cur->dst_port;
 			memcpy(&databuf[i * (sizeof(Connection) - 4) + 12], &d, sizeof(int));
-			d = p->protocol;
+			d = cur->protocol;
 			memcpy(&databuf[i * (sizeof(Connection) - 4) + 16], &d, sizeof(int));
-			d = (int)hashTable[p->index];
+			d = cur->timer1;
 			memcpy(&databuf[i * (sizeof(Connection) - 4) + 20], &d, sizeof(unsigned));
 
-			p = p->next;
 			i++;
+		
 		}
 
 		// unlock
-		hashLock = 0;
+		spin_unlock(&my_lock);
+
 		copy_to_user(buf, databuf, ret);
 		printk("Connection: Read %d bytes\n", ret);
 	}
@@ -290,25 +290,22 @@ int is_in_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,in
 	unsigned pos = get_hash(scode);
 
 
-	while(hashLock)
-		;
+	Connection *entry;
+	spin_lock(&my_lock);  // lock
 
-	hashLock = 1;
-
-	if (hashTable[pos]) {
-
-		hashTable[pos] = CONNECT_TIME;
-
-		hashLock = 0;
-
-		return -1;
+	hash_for_each (hashTable, pos, entry, node) {
+		if (entry->src_ip == src_ip && entry->dst_ip == dst_ip && 
+			entry->src_port == src_port && entry->dst_port == dst_port && 
+			entry->protocol == protocol) {
+			entry->timer1 = CONNECT_TIME;
+			spin_unlock(&my_lock); // unlock and return
+			return -1;
+		}
 	}
 
-	else {
+	spin_unlock(&my_lock);  // unlock
+    return pos; 
 
-		hashLock = 0;
-		return pos;
-	}
 }
 
 void insert_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,int protocol,unsigned index) {
@@ -320,15 +317,13 @@ void insert_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,
 	p->dst_port = dst_port;
 	p->protocol = protocol;
 	p->index = index;
-	p->next = conHead.next;
-	conHead.next = p;
+	p->timer1 = CONNECT_TIME;
 
-	while(hashLock)
-		;
-	hashLock = 1;
-	hashTable[index] = CONNECT_TIME;
+	spin_lock(&my_lock);  // lock
+	hash_add(hashTable, &p->node, index);
+	spin_unlock(&my_lock); // unlock
+
 	++connection_num;
-	hashLock = 0;
 }
 
 void add_log(Rule *p) {
@@ -345,30 +340,14 @@ void add_log(Rule *p) {
 }
 
 void time_out(struct timer_list *timer) {
-
-	Connection *p = conHead.next, *p0 = &conHead;
-
-	while(hashLock)
-		;
-
-	hashLock = 1;
-
-	while(p != &conEnd) {
-		hashTable[p->index]--;
-
-		if (!hashTable[p->index]) {
-			p0->next = p->next;
-			kfree(p);
-			connection_num--;
-			p = p0->next;
-		}
-		else {
-			p0 = p;
-			p = p->next;
-		}
+	unsigned bkt;
+	Connection *cur;
+	spin_lock(&my_lock);
+	hash_for_each (hashTable, bkt, cur, node) {
+		cur->timer1--;
 	}
+	spin_unlock(&my_lock);
 
-	hashLock = 0;
 	mod_timer(timer, jiffies + HZ); 
 }
 
@@ -413,6 +392,7 @@ void print_rules(void) {
 	}
 }
 
+/*
 void print_connections(void) {
 	Connection *p = conHead.next;
 
@@ -446,6 +426,7 @@ void print_connections(void) {
 
 	hashLock = 0;
 }
+*/
 
 static unsigned get_hash(int k) {
 	unsigned a, b, c=4;
@@ -461,7 +442,7 @@ static unsigned get_hash(int k) {
 	b -= c; b -= a; b ^= (a<<10); 
 	c -= a; c -= b; c ^= (b>>15); 
   
-    return c%HASH_SIZE;
+    return c%(1 << (HASH_SIZER));
 }
 
 bool check_pkg(struct sk_buff *skb) {
@@ -475,7 +456,7 @@ bool check_pkg(struct sk_buff *skb) {
 	pkg.src_ip = ntohl(ip->saddr);
 	pkg.dst_ip = ntohl(ip->daddr);
 	pkg.src_mask = pkg.dst_mask = 0xffffffff;
-
+	
 	int syn;
 	if (ip->protocol == TCP) {
 		struct tcphdr *tcp = tcp_hdr(skb);
@@ -548,8 +529,7 @@ bool check_pkg(struct sk_buff *skb) {
 				return false;
 			}
 		}
-
-		// 默认策略允许
+		// Default allowed
 		insert_hashTable(pkg.src_ip, pkg.dst_ip, pkg.src_port, pkg.dst_port, pkg.protocol, pos);
 		return true;
 	}
@@ -570,9 +550,8 @@ void addRules_test(void) {
 
 static int __init myfirewall_init(void) {
 
-	conHead.next = &conEnd;
-	conEnd.next = NULL;
-
+	hash_init(hashTable);  // init hashtble
+	spin_lock_init(&my_lock);
 	cdev_init(&cdev, &datadev_fops);
 	alloc_chrdev_region(&devID, 2, 255, "myfw");
 	printk(KERN_INFO "MAJOR Number is %d\n", MAJOR(devID));
@@ -599,6 +578,17 @@ static int __init myfirewall_init(void) {
 }
 
 static void __exit myfirewall_exit(void) {
+
+	Connection *entry;
+    struct hlist_node *tmp;
+    int bkt;
+
+    // clear hash table
+    hash_for_each_safe(hashTable, bkt, tmp, entry, node) {
+        hash_del(&entry->node);
+        kfree(entry);
+    }
+
 	device_destroy(D_class, devID);
 	class_destroy(D_class);
 	cdev_del(&cdev);
