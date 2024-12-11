@@ -23,21 +23,21 @@
 #include <asm/uaccess.h>
 #include <net/ip.h>
 
-// 设备号
+// dev numbers
 #define MYMAJOR	200
-// 协议号
+// Protocol numbers
 #define TCP			6
 #define	UDP			17
 #define ICMP		1
 #define ANY			-1
 #define ICMP_PORT	65530
-// 定义常量
+
 #define MAX_RULE_NUM	50
 #define MAX_LOG_NUM		100
 #define MAX_NAT_NUM 	1000
 #define HASH_SIZE		1000001
 #define CONNECT_TIME	60
-// 字符设备操作符
+// chrdev ops
 #define OP_WRITE_RULE	0
 #define OP_GET_CONNECT	1
 #define OP_GET_LOG		2
@@ -45,7 +45,7 @@
 
 
 
-// 整型IP转x.x.x.x形式
+// IP format
 #define NIPQUAD_FMT "%u.%u.%u.%u"
 #define NIPQUAD(addr) \
  ((unsigned char *)&addr)[3], \
@@ -53,13 +53,13 @@
  ((unsigned char *)&addr)[1], \
  ((unsigned char *)&addr)[0]
 
-//设备定义
+// dev def
 dev_t	devID;
 struct cdev 	cdev;
 struct class    *D_class;
 struct device   *D_device;
 
-// 规则结构
+// rules struct
 typedef struct {
     unsigned src_ip;
 	unsigned dst_ip;
@@ -71,12 +71,12 @@ typedef struct {
 	int action;
 	int log;
 } Rule;
-// 规则表
+// rules table
 static Rule rules[MAX_RULE_NUM];
-// 规则数
+// rules nums
 static int rule_num = 0;
 
-// 日志结构
+// Log struct
 typedef struct{
 	unsigned src_ip;
 	unsigned dst_ip;
@@ -85,13 +85,13 @@ typedef struct{
 	int protocol;
 	int action;
 } Log;
-// 日志表
+// Log tables
 static Log logs[MAX_LOG_NUM];
-// 日志数
+// Log nums
 static int log_num = 0;
 
 
-// 连接结构
+// Connected struct
 typedef struct con{
 	unsigned src_ip;
 	unsigned dst_ip;
@@ -101,65 +101,65 @@ typedef struct con{
 	int index;
 	struct con *next;
 }Connection;
-// 连接链表的表头表尾
+
 Connection conHead, conEnd;
-// 连接表(Hash表)
+// Hash table
 char hashTable[HASH_SIZE]={0};
-// 连接数
+// Connected numbers
 static int connection_num = 0;
 
-// HASH锁
+// hash lock
 char hashLock = 0;
-// 操作符（0写规则，1获取连接表，2获取日志，3获取NAT表）
+// op（0 write rules 1 get connection table，2 get logs)
 static unsigned op_flag;
-// 读写缓冲区
+// read write buffer
 static char databuf[20480];
 
 
-// hook注册
+// hook in
 unsigned int hook_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
-// hook注销
+// hook out
 unsigned int hook_out(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
-// 字符设备打开
+// open chardev
 static int datadev_open(struct inode *inode, struct file *filp);
-// 字符设备读取
+// read chardev
 static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, loff_t *ppos);
-// 字符设备写入
+// write chardev
 static ssize_t datadev_write(struct file *file, const char __user *user, size_t size, loff_t *ppos);
-// 检查连接是否在连接表中，若在，返回-1，并更新存活时间，若不在，返回待插入的位置
+// check in hashtable
 int is_in_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,int protocol);
-// 将连接信息插入到链表
+// insert table
 void insert_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,int protocol,unsigned index);
-// 记录日志
+
 void add_log(Rule *p);
-// 连接超时
+// update connection table
 void time_out(struct timer_list *timer);
-// 打印规则
+
 void print_rules(void);
-// 打印连接
+
 void print_connections(void);
-// Hash函数
+
 static unsigned get_hash(int k);
-// 真正负责检查过滤的工作函数
+// check all pkg
 bool check_pkg(struct sk_buff *skb);
 
-// hook注册结构体定义
+// netfilter hook sturcture
 static struct nf_hook_ops hook_in_ops = {
     .hook		= hook_in,				// hook处理函数
     .pf         = PF_INET,              // 协议类型
     .hooknum    = NF_INET_PRE_ROUTING,	// hook注册点
     .priority   = NF_IP_PRI_FIRST       // 优先级
 };
-// hook注销结构体定义
+
 static struct nf_hook_ops hook_out_ops = {
     .hook		= hook_out,				// hook处理函数
     .pf         = PF_INET,              // 协议类型
     .hooknum    = NF_INET_POST_ROUTING,	// hook注册点
     .priority   = NF_IP_PRI_FIRST       // 优先级
 };
-// 连接超时结构体定义
+
 static struct timer_list connect_timer;
-// 字符设备结构体定义(与用户程序信息交换)
+
 static const struct file_operations datadev_fops = {
 	.open		= datadev_open,			// 打开字符设备
 	.read		= datadev_read,			// 读取字符设备
@@ -196,15 +196,15 @@ static int datadev_open(struct inode *inode, struct file *file) {
 static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, loff_t *ppos) {
 	int ret = 0;
 
-	// 获取连接表
+	// get connection table
 	if (op_flag == OP_GET_CONNECT) {
-		// 等待开锁
+		// wait unlock
 		while (hashLock)
 			;
-		// 上锁
+		// lock
 		hashLock = 1;
 		
-		// 返回值大小 = 连接数 * Connection大小
+		// return connection table size
 		ret = connection_num * (sizeof(Connection) - 4);
 		if (ret > size) {
 			printk("Connection: Read Overflow\n");
@@ -231,12 +231,12 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 			i++;
 		}
 
-		// 开锁
+		// unlock
 		hashLock = 0;
 		copy_to_user(buf, databuf, ret);
 		printk("Connection: Read %d bytes\n", ret);
 	}
-	// 获取日志表
+	// get Logs table
 	else if (op_flag == OP_GET_LOG) {
 		ret = log_num * sizeof(Log);
 		if (ret > size) {
@@ -248,7 +248,6 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 		copy_to_user(buf, databuf, ret);
 		printk("Log: Read %d bytes\n", ret);
 	}
-	// TODO:获取NAT表
 
 	return ret;
 }
@@ -290,23 +289,23 @@ int is_in_hashTable(unsigned src_ip,unsigned dst_ip,int src_port,int dst_port,in
 	unsigned scode = src_ip ^ dst_ip ^ src_port ^ dst_port ^ protocol;
 	unsigned pos = get_hash(scode);
 
-	// 等待开锁
+
 	while(hashLock)
 		;
-	// 上锁
+
 	hashLock = 1;
-	// 连接存在，则更新连接时间
+
 	if (hashTable[pos]) {
-		// 更新连接时间
+
 		hashTable[pos] = CONNECT_TIME;
-		// 开锁
+
 		hashLock = 0;
-		// 返回-1
+
 		return -1;
 	}
-	// 连接不存在，返回插入位置
+
 	else {
-		// 开锁
+
 		hashLock = 0;
 		return pos;
 	}
@@ -346,17 +345,17 @@ void add_log(Rule *p) {
 }
 
 void time_out(struct timer_list *timer) {
-	// p=首个连接，p0=链表头
+
 	Connection *p = conHead.next, *p0 = &conHead;
-	// 等待开锁
+
 	while(hashLock)
 		;
-	// 上锁
+
 	hashLock = 1;
-	// 遍历链表减时间
+
 	while(p != &conEnd) {
 		hashTable[p->index]--;
-		// 连接超时
+
 		if (!hashTable[p->index]) {
 			p0->next = p->next;
 			kfree(p);
@@ -368,7 +367,7 @@ void time_out(struct timer_list *timer) {
 			p = p->next;
 		}
 	}
-	// 开锁
+
 	hashLock = 0;
 	mod_timer(timer, jiffies + HZ); 
 }
@@ -417,10 +416,10 @@ void print_rules(void) {
 void print_connections(void) {
 	Connection *p = conHead.next;
 
-	// 等待开锁
+
 	while(hashLock)
 		;
-	// 上锁
+
 	hashLock = 1;
 
 	printk("************************************************\n");
@@ -444,7 +443,7 @@ void print_connections(void) {
 	}
 	printk("************************************************\n");
 
-	// 开锁
+
 	hashLock = 0;
 }
 
@@ -570,7 +569,7 @@ void addRules_test(void) {
 }
 
 static int __init myfirewall_init(void) {
-	//创建连接表结构
+
 	conHead.next = &conEnd;
 	conEnd.next = NULL;
 
@@ -583,8 +582,7 @@ static int __init myfirewall_init(void) {
 	D_class = class_create("Myfw");
 	D_device = device_create(D_class, NULL, devID, NULL, "myfw");
 
-	
-	//初始化定时器
+
 	timer_setup(&connect_timer, time_out, 0);
 	mod_timer(&connect_timer, jiffies + HZ);
 	
