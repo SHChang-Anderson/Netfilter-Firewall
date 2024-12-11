@@ -34,7 +34,7 @@ static string RULE_DB   = "rule.db";
 void getRules() {
     ruleList.clear();
     
-    // 从 "rule.db" 中读取规则
+    // read uncommit rules
     char databuf[20480];
     ifstream inputFile;
     inputFile.open(RULE_DB, ios::binary);
@@ -47,7 +47,7 @@ void getRules() {
 }
 
 void getConnection() {
-    // 告诉内核：我要开始读取Connection
+    // prepare read connection
     ofstream outputKernel;
     ifstream checkFile(DEV_NAME);
     if (!checkFile.is_open()) {
@@ -63,7 +63,7 @@ void getConnection() {
     outputKernel << OP_GET_CONNECT;
     outputKernel.close();
 
-    // 开始读取Connection
+    // start reading connection
     cout << "Get connection" << endl;
     char databuf[20480];
     ifstream inputKernel;
@@ -72,7 +72,7 @@ void getConnection() {
         cerr << "Error: Could get Connection!" << endl;
         return;
     }
-    // FIXME:将connection输入到List中
+    // Connection List
     int i=0;
     while (inputKernel.read(databuf, sizeof(Connection))) {
         Connection *con = new Connection(databuf, 0);
@@ -102,7 +102,7 @@ void getLogs() {
     outputKernel << OP_GET_LOG;
     outputKernel.close();
 
-    // 开始读取Logs
+    // read Logs
     cout << "Get logs" << endl;
     char databuf[20480];
     ifstream inputKernel;
@@ -161,7 +161,7 @@ void addRule(string sip, string dip, string smask, string dmask, int sport, int 
 
     // ruleList.push_back(*rule);
     
-    // 将新rule写入文件
+    // write new rules
     ofstream outputFile;
     outputFile.open(RULE_DB, ios::app);
     outputFile.write((char*)rule, sizeof(Rule));
@@ -169,16 +169,14 @@ void addRule(string sip, string dip, string smask, string dmask, int sport, int 
 }
 
 void delRule(int index) {
-    // 先获取所有rules
+
     getRules();
 
-    // 删除指定下标的rule
+
     ruleList.erase(ruleList.begin() + index);
 
-    // 清空源文件
     ofstream fileout(RULE_DB, ios::trunc);
 
-    // 写回到文件
     ofstream outputFile;
     outputFile.open(RULE_DB, ios::app);
     for(int i=0; i<ruleList.size(); ++i) {
@@ -202,12 +200,12 @@ void commitRule() {
         outputKernel.write((char*)&ruleList[i], sizeof(Rule));
     }
     outputKernel.close();
-
-    cout << "Commit " << ruleList.size() << " rules" <<endl;
+    
+    cout << "Commit " << ruleList.size() << " rules" <<endl;    
 }
 
 void test() {
-    addRule("0.1.2.3", "192.168.23.129", "0.0.0.0", "255.255.255.255", ANY, 80, TCP, 0, 1);
+    // saddRule("172.20.10.3", "172.20.10.4", "255.255.255.255", "255.255.255.255", 65530, 65530, ICMP, 0, 1);
     // addRule("4.5.6.7", "192.168.23.129", "255.255.255.255", "255.255.255.255", ANY, ANY, ICMP, 1, 0);
     // addRule("8.9.10.11", "192.168.23.129", "0.0.0.0", "255.255.255.255", ANY, 80, TCP, 0, 1);
     // addRule("12.13.14.15", "192.168.23.129", "255.255.255.255", "255.255.255.255", ANY, ANY, ICMP, 1, 0);
@@ -226,6 +224,7 @@ void help() {
     cout << "\t-a, --add <rule> \n\t\tadd a rule in database" << endl;
     cout << "\t-d, --del <index1, index2...> \n\t\tdel rule in index" << endl;
     cout << "\t-c, --commit \n\t\tcommit rules to kernel" << endl;
+    cout << "\t--dl \n\t\tremove all rules in database" << endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -321,6 +320,8 @@ int main(int argc, char* argv[]) {
         commitRule();
         getRules();
         printRules();
+    } else if ((argc == 2) && (fuc == "--dl")) {
+        ofstream fileout(RULE_DB, ios::trunc);
     }
     else {
         help();
