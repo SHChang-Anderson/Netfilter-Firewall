@@ -11,6 +11,7 @@ Features:
 
 ## Features
 - Key features of your firewall:
+
    - Real-time packet filtering.
    - User-space and kernel-space communication via Character Device.
    - Filter packets based on source IP, destination IP, port number, and protocol.
@@ -21,11 +22,11 @@ Features:
 
 ## Requirements
 - List of dependencies:
+
   - Linux Kernel version: `6.8.0`.
   - Build tools: `gcc version 11.4.0`.
 
 
-Here's the revised version of your usage section with the updated command format, which includes `sudo ./myfw` for each command:
 
 ## Usage
 
