@@ -140,9 +140,8 @@ void time_out(struct timer_list *timer);
 
 void print_rules(void);
 
-// void print_connections(void);
-
 static unsigned get_hash(int k);
+
 // check all pkg
 bool check_pkg(struct sk_buff *skb);
 
@@ -401,41 +400,6 @@ void print_rules(void) {
 	}
 }
 
-/*
-void print_connections(void) {
-	Connection *p = conHead.next;
-
-
-	while(hashLock)
-		;
-
-	hashLock = 1;
-
-	printk("************************************************\n");
-	while (p != &conEnd) {
-		// srcIP & dstIP
-		printk(NIPQUAD_FMT " ", NIPQUAD(p->src_ip), p->src_ip);
-		printk(NIPQUAD_FMT " ", NIPQUAD(p->dst_ip), p->dst_ip);
-		// port
-		printk("%u %u ", p->src_port, p->dst_port);
-		// protocol
-		if (p->protocol == TCP)
-			printk("TCP ");
-		else if (p->protocol == UDP)
-			printk("UDP ");
-		else if (p->protocol == ICMP)
-			printk("ICMP ");
-		// left time
-		printk("%u\n", hashTable[p->index]);
-		
-		p = p->next;
-	}
-	printk("************************************************\n");
-
-
-	hashLock = 0;
-}
-*/
 
 static unsigned get_hash(int k) {
 	unsigned a, b, c=4;

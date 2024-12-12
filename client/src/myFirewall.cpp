@@ -220,8 +220,7 @@ void test() {
 void help() {
     cout << "Usage: myFirewall [Options]" <<endl;
     cout << "\t-p, --print [Options] \n\t\tprint all data" << endl;
-    // cout << "\t-a, --add <src_ip> <dst_ip> <src_mask> <dst_mask> <src_port> <dst_port> <protocol> <action> <log>" << endl;
-    cout << "\t-a, --add <rule> \n\t\tadd a rule in database" << endl;
+    cout << "\t-a, --add <src_ip> <dst_ip> <src_mask> <dst_mask> <src_port> <dst_port> <protocol> <action> <log>" << endl;
     cout << "\t-d, --del <index1, index2...> \n\t\tdel rule in index" << endl;
     cout << "\t-c, --commit \n\t\tcommit rules to kernel" << endl;
     cout << "\t--dl \n\t\tremove all rules in database" << endl;
