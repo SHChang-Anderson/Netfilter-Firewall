@@ -95,7 +95,7 @@ static int log_num = 0;
 
 
 // Connected struct
-typedef struct con{
+typedef struct Connection{
 	unsigned src_ip;
 	unsigned dst_ip;
 	int src_port;
@@ -211,7 +211,7 @@ static ssize_t datadev_read(struct file *file, char __user *buf, size_t size, lo
 		}
 		// wait unlock
 		spin_lock(&my_lock);
-		int d, i=0;
+		int i=0;
 		hash_for_each (hashTable, bkt, cur, node) {
 			unsigned int src_ip = cur->src_ip;
 			unsigned int dst_ip = cur->dst_ip;
@@ -348,8 +348,9 @@ void add_log(Rule *p) {
 void time_out(struct timer_list *timer) {
 	unsigned bkt;
 	Connection *cur;
+	struct hlist_node *tmp;
 	spin_lock(&my_lock);
-	hash_for_each (hashTable, bkt, cur, node) {
+	hash_for_each_safe (hashTable, bkt, tmp, cur, node) {
 		cur->timer1--;
 		if (cur->timer1 <= 0)
 			hash_del(&cur->node);
